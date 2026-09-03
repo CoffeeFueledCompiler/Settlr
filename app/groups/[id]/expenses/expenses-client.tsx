@@ -1,11 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { TextInput } from "@/components/ui/text-input";
+import { FilterChip } from "@/components/ui/chips";
+import { Avatar } from "@/components/ui/avatar";
 
 type Member = { id: string; name: string };
 type Category = "stays" | "food" | "transport" | "activities" | "other";
 
 const CATEGORIES: Category[] = ["stays", "food", "transport", "activities", "other"];
+const selectClasses = "shadow-raised rounded-xl border-none bg-base px-2 py-1.5 text-sm text-ink outline-none";
 
 type Expense = {
   id: string;
@@ -56,7 +62,9 @@ export function ExpensesClient({
 
   return (
     <div className="flex flex-col gap-6">
-      {!disabled && (
+      {disabled ? (
+        <p className="text-ink/60">This trip has been settled — no more expenses can be added.</p>
+      ) : (
         <AddExpenseForm
           groupId={groupId}
           members={members}
@@ -67,43 +75,40 @@ export function ExpensesClient({
 
       <div className="flex flex-wrap gap-2">
         {(["all", ...CATEGORIES] as const).map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setFilter(c)}
-            className={`rounded-full border px-3 py-1 text-sm capitalize ${
-              filter === c
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-300 text-zinc-700"
-            }`}
-          >
-            {c}
-          </button>
+          <FilterChip key={c} label={c} active={filter === c} onClick={() => setFilter(c)} />
         ))}
       </div>
 
       {loading ? (
-        <p className="text-zinc-500">Loading…</p>
+        <p className="text-ink/60">Loading…</p>
       ) : expenses.length === 0 ? (
-        <p className="text-zinc-500">No expenses yet.</p>
+        <p className="text-ink/60">No expenses yet.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {expenses.map((e) => (
-            <li key={e.id} className="rounded border border-zinc-200 p-3">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">{e.description}</span>
-                <span className="tabular-nums">{currency.format(e.amountCents / 100)}</span>
-              </div>
-              <p className="text-sm text-zinc-500">
-                {e.paidBy.name} paid · split {e.splits.length} way{e.splits.length === 1 ? "" : "s"}
-                {e.category ? ` · ${e.category}` : ""} ·{" "}
-                {new Date(e.createdAt).toLocaleDateString()}
-              </p>
+            <li key={e.id}>
+              <Card className="flex items-center gap-3">
+                <Avatar name={e.paidBy.name} seed={e.paidBy.id} size={32} />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-display font-semibold text-ink">{e.description}</span>
+                    <span className="tabular-nums font-display font-semibold text-ink">
+                      {currency.format(e.amountCents / 100)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-ink/60">
+                    {e.paidBy.name} paid · split {e.splits.length} way
+                    {e.splits.length === 1 ? "" : "s"}
+                    {e.category ? ` · ${e.category}` : ""} ·{" "}
+                    {new Date(e.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </Card>
             </li>
           ))}
         </ul>
       )}
-      <p className="text-sm text-zinc-400">
+      <p className="text-sm text-ink/50">
         {total} expense{total === 1 ? "" : "s"}
       </p>
     </div>
@@ -214,116 +219,114 @@ function AddExpenseForm({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded border border-zinc-200 p-4">
-      <div className="flex gap-2">
-        <input
-          className="flex-1 rounded border border-zinc-300 px-3 py-2"
-          placeholder="What was it for?"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={120}
-          required
-        />
-        <input
-          className="w-28 rounded border border-zinc-300 px-3 py-2"
-          placeholder="Amount"
-          inputMode="decimal"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          required
-        />
-      </div>
+    <Card>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <div className="flex gap-2">
+          <TextInput
+            className="flex-1"
+            placeholder="What was it for?"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={120}
+            required
+          />
+          <TextInput
+            className="w-28"
+            placeholder="Amount"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+          />
+        </div>
 
-      <div className="flex flex-wrap gap-2">
-        <select
-          className="rounded border border-zinc-300 px-2 py-1 text-sm"
-          value={category}
-          onChange={(e) => setCategory(e.target.value as Category | "")}
-        >
-          <option value="">No category</option>
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="rounded border border-zinc-300 px-2 py-1 text-sm"
-          value={paidById}
-          onChange={(e) => setPaidById(e.target.value)}
-        >
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name} paid
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex items-center gap-2 text-sm">
-        <button
-          type="button"
-          onClick={() => setCustomMode(false)}
-          className={!customMode ? "font-semibold" : "text-zinc-500"}
-        >
-          Split equally
-        </button>
-        <span>·</span>
-        <button
-          type="button"
-          onClick={() => setCustomMode(true)}
-          className={customMode ? "font-semibold" : "text-zinc-500"}
-        >
-          Custom amounts
-        </button>
-      </div>
-
-      {!customMode ? (
         <div className="flex flex-wrap gap-2">
-          {members.map((m) => (
-            <label key={m.id} className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                checked={splitWith.has(m.id)}
-                onChange={() => toggleMember(m.id)}
-              />
-              {m.name}
-            </label>
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {members.map((m) => (
-            <label key={m.id} className="flex items-center justify-between gap-2 text-sm">
-              {m.name}
-              <input
-                className="w-24 rounded border border-zinc-300 px-2 py-1"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={customShares[m.id] ?? ""}
-                onChange={(e) =>
-                  setCustomShares((prev) => ({ ...prev, [m.id]: e.target.value }))
-                }
-              />
-            </label>
-          ))}
-          <p className="text-xs text-zinc-500">
-            {currency.format(customTotal / 100)} of{" "}
-            {amountCents ? currency.format(amountCents / 100) : "—"}
-          </p>
-        </div>
-      )}
+          <select
+            className={selectClasses}
+            value={category}
+            onChange={(e) => setCategory(e.target.value as Category | "")}
+          >
+            <option value="">No category</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+          <select
+            className={selectClasses}
+            value={paidById}
+            onChange={(e) => setPaidById(e.target.value)}
+          >
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} paid
+              </option>
+            ))}
+          </select>
+        </div>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-fit rounded bg-zinc-900 px-4 py-2 text-white disabled:opacity-50"
-      >
-        {submitting ? "Adding…" : "Add expense"}
-      </button>
-    </form>
+        <div className="flex items-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => setCustomMode(false)}
+            className={!customMode ? "font-semibold text-slate" : "text-ink/50"}
+          >
+            Split equally
+          </button>
+          <span className="text-ink/30">·</span>
+          <button
+            type="button"
+            onClick={() => setCustomMode(true)}
+            className={customMode ? "font-semibold text-slate" : "text-ink/50"}
+          >
+            Custom amounts
+          </button>
+        </div>
+
+        {!customMode ? (
+          <div className="flex flex-wrap gap-2">
+            {members.map((m) => (
+              <label key={m.id} className="flex items-center gap-1 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={splitWith.has(m.id)}
+                  onChange={() => toggleMember(m.id)}
+                />
+                {m.name}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {members.map((m) => (
+              <label key={m.id} className="flex items-center justify-between gap-2 text-sm text-ink">
+                {m.name}
+                <TextInput
+                  className="w-24"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={customShares[m.id] ?? ""}
+                  onChange={(e) =>
+                    setCustomShares((prev) => ({ ...prev, [m.id]: e.target.value }))
+                  }
+                />
+              </label>
+            ))}
+            <p className="text-xs text-ink/60">
+              {currency.format(customTotal / 100)} of{" "}
+              {amountCents ? currency.format(amountCents / 100) : "—"}
+            </p>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-700">{error}</p>}
+
+        <Button type="submit" disabled={submitting} className="w-fit">
+          {submitting ? "Adding…" : "Add expense"}
+        </Button>
+      </form>
+    </Card>
   );
 }

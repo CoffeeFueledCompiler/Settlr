@@ -1,26 +1,61 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --base: #cbcbcb;
+  --cream: #ffffe3;
+  --ink: #4a4a4a;
+  --slate: #6d8196;
+
+  --shadow-light: rgba(255, 255, 255, 0.85);
+  --shadow-dark: rgba(74, 74, 74, 0.38);
+
+  --shadow-light-cream: rgba(255, 255, 255, 0.6);
+  --shadow-dark-cream: rgba(74, 74, 74, 0.18);
+
+  /* The one deliberate dark exception — the settle-up ledger panel only. */
+  --shadow-light-ink: rgba(255, 255, 255, 0.06);
+  --shadow-dark-ink: rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-base: var(--base);
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-manrope);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--base);
+  color: var(--ink);
+}
+
+/*
+ * Neumorphic shadow system — always this two-tone pair, never a flat drop shadow.
+ * Registered with @utility (not plain classes) so variants like hover:/focus:/active:
+ * work on them, e.g. `active:shadow-pressed`.
+ */
+@utility shadow-raised {
+  box-shadow: 7px 7px 14px var(--shadow-dark), -7px -7px 14px var(--shadow-light);
+}
+@utility shadow-pressed {
+  box-shadow: inset 7px 7px 14px var(--shadow-dark), inset -7px -7px 14px var(--shadow-light);
+}
+@utility shadow-raised-cream {
+  box-shadow: 5px 5px 10px var(--shadow-dark-cream), -5px -5px 10px var(--shadow-light-cream);
+}
+@utility shadow-pressed-cream {
+  box-shadow: inset 5px 5px 10px var(--shadow-dark-cream), inset -5px -5px 10px var(--shadow-light-cream);
+}
+/* Reserved for the settle-up ledger panel — deliberately the boldest surface
+   in the app. Don't reuse this treatment elsewhere or it stops reading as significant. */
+@utility shadow-raised-ink {
+  box-shadow: 5px 5px 12px var(--shadow-dark-ink), -1px -1px 3px var(--shadow-light-ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .transition-press {
+    transition: box-shadow 150ms ease, transform 150ms ease;
+  }
 }
