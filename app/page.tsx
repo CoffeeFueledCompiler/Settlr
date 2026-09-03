@@ -10,7 +10,9 @@ export default async function Home() {
   if (!session?.user?.id) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-6 p-6">
-        <h1 className="font-display text-4xl font-bold text-ink">Settlr</h1>
+        <h1 className="font-display text-4xl font-bold text-ink">
+          Settl<span className="text-slate">r</span>
+        </h1>
         <p className="max-w-xs text-center text-ink/70">
           Log what everyone pays on a trip, then settle up in the fewest payments possible.
         </p>

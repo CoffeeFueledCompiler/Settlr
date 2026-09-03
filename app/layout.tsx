@@ -17,6 +17,9 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "Settlr",
   description: "Group trip expense tracker — log payments, settle up in one shot.",
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
