@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUserOrThrow } from "@/lib/session";
 import { Card } from "@/components/ui/card";
 import { LinkButton } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 import { StatBlock } from "@/components/ui/stat-block";
 import { CategoryChip } from "@/components/ui/chips";
 import { NavBar } from "@/components/ui/nav-bar";
+import { MemberList } from "./member-list";
 
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -77,14 +77,18 @@ export default async function GroupPage({
 
         <section>
           <h2 className="mb-2 text-sm font-medium text-ink/60">Members</h2>
-          <ul className="flex flex-wrap gap-3">
-            {group.members.map((m) => (
-              <li key={m.id} className="flex flex-col items-center gap-1">
-                <Avatar name={m.user.name} seed={m.user.id} />
-                <span className="text-xs text-ink/70">{m.user.name}</span>
-              </li>
-            ))}
-          </ul>
+          <MemberList
+            groupId={group.id}
+            currentUserId={user.id}
+            isAdmin={group.createdById === user.id}
+            canRemove={group.status === "ACTIVE"}
+            members={group.members.map((m) => ({
+              id: m.id,
+              userId: m.user.id,
+              name: m.user.name,
+              joinedAt: m.joinedAt.toISOString(),
+            }))}
+          />
         </section>
 
         {group.status === "ACTIVE" && (

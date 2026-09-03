@@ -30,6 +30,7 @@ export default async function ExpensesPage({
           members={group.members.map((m) => ({ id: m.user.id, name: m.user.name }))}
           currentUserId={user.id}
           disabled={group.status === "SETTLED"}
+          isAdmin={group.createdById === user.id}
         />
       </main>
       <NavBar groupId={group.id} />

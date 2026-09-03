@@ -34,16 +34,29 @@ export function ExpensesClient({
   members,
   currentUserId,
   disabled,
+  isAdmin,
 }: {
   groupId: string;
   members: Member[];
   currentUserId: string;
   disabled: boolean;
+  isAdmin: boolean;
 }) {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<Category | "all">("all");
   const [loading, setLoading] = useState(true);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  async function removeExpense(expenseId: string) {
+    setRemovingId(expenseId);
+    const res = await fetch(`/api/groups/${groupId}/expenses/${expenseId}`, { method: "DELETE" });
+    setRemovingId(null);
+    if (res.ok) {
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+      setTotal((prev) => prev - 1);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -100,9 +113,19 @@ export function ExpensesClient({
                     {e.paidBy.name} paid · split {e.splits.length} way
                     {e.splits.length === 1 ? "" : "s"}
                     {e.category ? ` · ${e.category}` : ""} ·{" "}
-                    {new Date(e.createdAt).toLocaleDateString()}
+                    {new Date(e.createdAt).toLocaleString()}
                   </p>
                 </div>
+                {!disabled && isAdmin && (
+                  <Button
+                    variant="ghost"
+                    className="px-2 py-1 text-xs text-red-700"
+                    disabled={removingId === e.id}
+                    onClick={() => removeExpense(e.id)}
+                  >
+                    {removingId === e.id ? "Removing…" : "Remove"}
+                  </Button>
+                )}
               </Card>
             </li>
           ))}
