@@ -58,6 +58,68 @@ export async function computeBalanceBreakdown(db: Db, groupId: string) {
   });
 }
 
+export type PairwiseLineItem = {
+  expenseId: string;
+  description: string;
+  amountCents: number;
+  direction: "bOwesA" | "aOwesB";
+};
+
+/**
+ * Direct two-person offset — separate from the group-wide netting algorithm above.
+ * Only nets userA and userB's own transactions against each other, nothing routed
+ * through a third party. Read-only, safe on an ACTIVE group.
+ */
+export async function computePairwiseLedger(db: Db, groupId: string, userAId: string, userBId: string) {
+  const [bOwesASplits, aOwesBSplits] = await Promise.all([
+    db.expenseSplit.findMany({
+      where: { userId: userBId, expense: { groupId, paidById: userAId } },
+      include: { expense: true },
+    }),
+    db.expenseSplit.findMany({
+      where: { userId: userAId, expense: { groupId, paidById: userBId } },
+      include: { expense: true },
+    }),
+  ]);
+
+  const bOwesA = bOwesASplits.reduce((acc, s) => acc + s.shareCents, 0);
+  const aOwesB = aOwesBSplits.reduce((acc, s) => acc + s.shareCents, 0);
+
+  const lineItems: PairwiseLineItem[] = [
+    ...bOwesASplits.map((s) => ({
+      expenseId: s.expenseId,
+      description: s.expense.description,
+      amountCents: s.shareCents,
+      direction: "bOwesA" as const,
+    })),
+    ...aOwesBSplits.map((s) => ({
+      expenseId: s.expenseId,
+      description: s.expense.description,
+      amountCents: s.shareCents,
+      direction: "aOwesB" as const,
+    })),
+  ];
+
+  // netCents > 0 => userA owes userB; netCents < 0 => userB owes userA
+  return { aOwesB, bOwesA, netCents: aOwesB - bOwesA, lineItems };
+}
+
+/** userId's pairwise ledger against every other member of the group. */
+export async function computeAllPairwiseLedgers(db: Db, groupId: string, userId: string) {
+  const others = await db.groupMember.findMany({
+    where: { groupId, userId: { not: userId } },
+    include: { user: true },
+  });
+
+  return Promise.all(
+    others.map(async (m) => ({
+      userId: m.userId,
+      name: m.user.name,
+      ...(await computePairwiseLedger(db, groupId, userId, m.userId)),
+    }))
+  );
+}
+
 /**
  * Greedy debt-simplification: repeatedly match the largest creditor with the
  * largest debtor. Not guaranteed globally minimal (NP-hard in general) but

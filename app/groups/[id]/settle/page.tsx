@@ -47,7 +47,6 @@ export default async function SettlePage({
           isAdmin={group.createdById === user.id}
           initialStatus={group.status}
           expenseCount={expenseCount}
-          breakdown={breakdown}
           preview={preview.map((p) => ({
             fromUserId: p.fromUserId,
             toUserId: p.toUserId,
