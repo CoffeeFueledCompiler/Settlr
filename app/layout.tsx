@@ -15,7 +15,7 @@ const manrope = Manrope({
   weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
 });
-
+// The metadata object is used to define the metadata for the application, including the title, description, and verification information for Google.
 export const metadata: Metadata = {
   title: "Settlr",
   description: "Group trip expense tracker — log payments, settle up in one shot.",
