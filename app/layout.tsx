@@ -9,6 +9,7 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
 });
 
+// Manrope is used for the body text, while Space Grotesk is used for headings and other UI elements.
 const manrope = Manrope({
   variable: "--font-manrope",
   weight: ["400", "500", "600", "700"],
