@@ -20,7 +20,7 @@ type Expense = {
   category: string | null;
   createdAt: string;
   paidBy: { id: string; name: string };
-  splits: { userId: string; shareCents: number }[];
+  splits: { userId: string; shareCents: number; user: { name: string } }[];
 };
 
 const currency = new Intl.NumberFormat("en-IN", {
@@ -33,18 +33,50 @@ function csvField(value: string) {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
+async function fetchAllExpenses(groupId: string, filter: Category | "all") {
+  const qs = filter === "all" ? "" : `&category=${filter}`;
+  const all: Expense[] = [];
+  let skip = 0;
+  for (;;) {
+    const res = await fetch(`/api/groups/${groupId}/expenses?take=50&skip=${skip}${qs}`);
+    const data = await res.json();
+    all.push(...data.expenses);
+    if (all.length >= data.total || data.expenses.length === 0) break;
+    skip += 50;
+  }
+  return all;
+}
+
+// One row per split line (not per expense) so the sheet is manually verifiable:
+// for any expense, summing "Share amount" down its rows reproduces "Total amount".
 function exportExpensesToCsv(expenses: Expense[]) {
-  const rows = [
-    ["Date", "Description", "Category", "Amount", "Paid by", "Split count"],
-    ...expenses.map((e) => [
-      new Date(e.createdAt).toISOString(),
-      e.description,
-      e.category ?? "",
-      (e.amountCents / 100).toFixed(2),
-      e.paidBy.name,
-      String(e.splits.length),
-    ]),
+  const header = [
+    "Date",
+    "Description",
+    "Category",
+    "Total amount",
+    "Paid by",
+    "Split with",
+    "Share amount",
   ];
+  const rows: string[][] = [header];
+
+  for (const e of expenses) {
+    const date = new Date(e.createdAt).toISOString().slice(0, 10);
+    e.splits.forEach((s, i) => {
+      rows.push([
+        date,
+        e.description,
+        e.category ?? "",
+        i === 0 ? (e.amountCents / 100).toFixed(2) : "",
+        i === 0 ? e.paidBy.name : "",
+        s.user.name,
+        (s.shareCents / 100).toFixed(2),
+      ]);
+    });
+    rows.push(["", "", "", "", "", "Total split", (e.splits.reduce((a, s) => a + s.shareCents, 0) / 100).toFixed(2)]);
+  }
+
   const csv = rows.map((row) => row.map(csvField).join(",")).join("\r\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -73,6 +105,14 @@ export function ExpensesClient({
   const [filter, setFilter] = useState<Category | "all">("all");
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    const all = await fetchAllExpenses(groupId, filter);
+    setExporting(false);
+    exportExpensesToCsv(all);
+  }
 
   async function removeExpense(expenseId: string) {
     setRemovingId(expenseId);
@@ -119,8 +159,8 @@ export function ExpensesClient({
           ))}
         </div>
         {expenses.length > 0 && (
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => exportExpensesToCsv(expenses)}>
-            Export CSV
+          <Button variant="ghost" className="px-2 py-1 text-xs" disabled={exporting} onClick={handleExport}>
+            {exporting ? "Exporting…" : "Export CSV"}
           </Button>
         )}
       </div>
