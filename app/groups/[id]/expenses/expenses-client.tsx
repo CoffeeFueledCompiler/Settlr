@@ -29,6 +29,32 @@ const currency = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
+function csvField(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function exportExpensesToCsv(expenses: Expense[]) {
+  const rows = [
+    ["Date", "Description", "Category", "Amount", "Paid by", "Split count"],
+    ...expenses.map((e) => [
+      new Date(e.createdAt).toISOString(),
+      e.description,
+      e.category ?? "",
+      (e.amountCents / 100).toFixed(2),
+      e.paidBy.name,
+      String(e.splits.length),
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(csvField).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `expenses-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function ExpensesClient({
   groupId,
   members,
@@ -86,10 +112,17 @@ export function ExpensesClient({
         />
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {(["all", ...CATEGORIES] as const).map((c) => (
-          <FilterChip key={c} label={c} active={filter === c} onClick={() => setFilter(c)} />
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {(["all", ...CATEGORIES] as const).map((c) => (
+            <FilterChip key={c} label={c} active={filter === c} onClick={() => setFilter(c)} />
+          ))}
+        </div>
+        {expenses.length > 0 && (
+          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => exportExpensesToCsv(expenses)}>
+            Export CSV
+          </Button>
+        )}
       </div>
 
       {loading ? (
