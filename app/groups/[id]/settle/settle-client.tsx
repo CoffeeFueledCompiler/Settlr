@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatBlock } from "@/components/ui/stat-block";
+import { Avatar } from "@/components/ui/avatar";
 
 type SettlementRow = {
   id: string;
@@ -15,6 +16,9 @@ type SettlementRow = {
   toUser: { name: string };
 };
 
+type BalanceRow = { userId: string; name: string; paidCents: number; owedCents: number; netCents: number };
+type PreviewRow = { fromUserId: string; toUserId: string; amountCents: number; fromName: string; toName: string };
+
 const currency = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
@@ -24,19 +28,26 @@ const currency = new Intl.NumberFormat("en-IN", {
 export function SettleClient({
   groupId,
   currentUserId,
+  isAdmin,
   initialStatus,
   expenseCount,
+  breakdown,
+  preview,
   initialSettlements,
 }: {
   groupId: string;
   currentUserId: string;
+  isAdmin: boolean;
   initialStatus: "ACTIVE" | "SETTLED";
   expenseCount: number;
+  breakdown: BalanceRow[];
+  preview: PreviewRow[];
   initialSettlements: SettlementRow[];
 }) {
   const [status, setStatus] = useState(initialStatus);
   const [settlements, setSettlements] = useState(initialSettlements);
   const [ending, setEnding] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function endTrip() {
@@ -56,6 +67,23 @@ export function SettleClient({
     setStatus("SETTLED");
   }
 
+  async function reopenTrip() {
+    setReopening(true);
+    setError(null);
+    const res = await fetch(`/api/groups/${groupId}/reopen`, { method: "POST" });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setError(body?.error ?? "Something went wrong");
+      setReopening(false);
+      return;
+    }
+
+    // Reopening also throws away the settle-up preview computed for the ACTIVE
+    // state, which this component was never handed — reload to fetch it fresh.
+    window.location.reload();
+  }
+
   async function markPaid(id: string) {
     const res = await fetch(`/api/settlements/${id}`, {
       method: "PATCH",
@@ -68,33 +96,100 @@ export function SettleClient({
   }
 
   if (status === "ACTIVE") {
+    const maxPaid = Math.max(1, ...breakdown.map((b) => b.paidCents));
     return (
-      <Card className="flex flex-col gap-4">
-        <StatBlock
-          label="Raw transactions"
-          value={`${expenseCount} expense${expenseCount === 1 ? "" : "s"}`}
-        />
+      <div className="flex flex-col gap-6">
+        <Card className="flex justify-around">
+          <StatBlock label="Raw transactions" value={`${expenseCount}`} />
+        </Card>
+
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-ink/60">Net balance</h2>
+          <ul className="flex flex-col gap-3">
+            {breakdown.map((b) => (
+              <li key={b.userId}>
+                <Card>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={b.name} seed={b.userId} size={32} />
+                    <span className="flex-1 font-display font-semibold text-ink">{b.name}</span>
+                    <span
+                      className={`tabular-nums font-display font-semibold ${
+                        b.netCents >= 0 ? "text-slate" : "text-ink/75"
+                      }`}
+                    >
+                      {b.netCents >= 0 ? "+" : "–"}
+                      {currency.format(Math.abs(b.netCents) / 100)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-ink/50">
+                    Paid {currency.format(b.paidCents / 100)} · owes {currency.format(b.owedCents / 100)}
+                  </p>
+                  <div className="shadow-pressed mt-2 h-2 overflow-hidden rounded-full">
+                    <div
+                      className={`h-full rounded-full ${b.netCents >= 0 ? "bg-slate" : "bg-ink/35"}`}
+                      style={{ width: `${Math.min(100, (b.paidCents / maxPaid) * 100)}%` }}
+                    />
+                  </div>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {preview.length > 0 && (
+          <section>
+            <h2 className="mb-1 text-sm font-medium text-ink/60">Settle-up preview</h2>
+            <p className="mb-2 text-xs text-ink/50">
+              Live estimate from expenses so far — becomes final once you end the trip.
+            </p>
+            <ul className="flex flex-col gap-2">
+              {preview.map((p, i) => (
+                <li key={i}>
+                  <Card className="flex items-center justify-between">
+                    <span className="font-display text-sm font-semibold text-ink">
+                      {p.fromName} → {p.toName}
+                    </span>
+                    <span className="tabular-nums font-display text-sm font-semibold text-slate">
+                      {currency.format(p.amountCents / 100)}
+                    </span>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {error && <p className="text-sm text-red-700">{error}</p>}
         <Button onClick={endTrip} disabled={ending} className="w-fit">
           {ending ? "Settling…" : "End trip"}
         </Button>
-      </Card>
+      </div>
     );
   }
 
   if (settlements.length === 0) {
     return (
-      <Card>
-        <p className="text-ink/70">Everyone&apos;s settled — nothing owed either way.</p>
-      </Card>
+      <div className="flex flex-col gap-4">
+        <Card>
+          <p className="text-ink/70">Everyone&apos;s settled — nothing owed either way.</p>
+        </Card>
+        {isAdmin && <ReopenButton reopening={reopening} onClick={reopenTrip} error={error} />}
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="flex justify-around">
-        <StatBlock label="Raw transactions" value={`${expenseCount}`} />
-        <StatBlock label="Final payments" value={`${settlements.length}`} />
+      <Card className="flex items-center justify-around">
+        <div className="text-center">
+          <p className="font-display text-2xl font-bold text-ink">{expenseCount}</p>
+          <p className="text-[10px] font-bold tracking-wide text-ink/55">RAW IOUs</p>
+        </div>
+        <span className="text-lg text-slate">→</span>
+        <div className="text-center">
+          <p className="font-display text-2xl font-bold text-slate">{settlements.length}</p>
+          <p className="text-[10px] font-bold tracking-wide text-ink/55">PAYMENTS</p>
+        </div>
       </Card>
 
       {/* Deliberate dark exception — the single boldest surface in the app. Don't reuse this treatment elsewhere. */}
@@ -119,6 +214,30 @@ export function SettleClient({
           </li>
         ))}
       </ul>
+
+      {isAdmin && <ReopenButton reopening={reopening} onClick={reopenTrip} error={error} />}
+    </div>
+  );
+}
+
+function ReopenButton({
+  reopening,
+  onClick,
+  error,
+}: {
+  reopening: boolean;
+  onClick: () => void;
+  error: string | null;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {error && <p className="text-sm text-red-700">{error}</p>}
+      <Button variant="ghost" onClick={onClick} disabled={reopening} className="w-fit">
+        {reopening ? "Reopening…" : "Reopen trip"}
+      </Button>
+      <p className="text-xs text-ink/50">
+        Unlocks the trip for new expenses and clears these settlements — you&apos;ll need to end the trip again once it&apos;s settled.
+      </p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb, testPrisma, createTestUser } from "../setup/test-db";
 import { mockSignedInAs } from "../setup/mock-auth";
 import { POST as endTrip } from "@/app/api/groups/[id]/end-trip/route";
+import { POST as reopenTrip } from "@/app/api/groups/[id]/reopen/route";
 import { PATCH as markPaid } from "@/app/api/settlements/[id]/route";
 
 function jsonRequest(url: string, method: string, body?: unknown) {
@@ -176,5 +177,58 @@ describe("settlement API (integration)", () => {
 
     const updated = await testPrisma.settlement.findUniqueOrThrow({ where: { id: settlement.id } });
     expect(updated.status).toBe("PAID");
+  });
+
+  it("reopen: only the trip creator can reopen a settled trip, and it clears settlements", async () => {
+    const [a, b] = await Promise.all([createTestUser(), createTestUser()]);
+    const group = await testPrisma.group.create({
+      data: {
+        name: "Trip",
+        joinCode: "REOPEN1",
+        createdById: a.id,
+        members: { create: [{ userId: a.id }, { userId: b.id }] },
+      },
+    });
+    await testPrisma.expense.create({
+      data: {
+        groupId: group.id,
+        paidById: a.id,
+        amountCents: 200,
+        description: "Lunch",
+        splits: {
+          create: [
+            { userId: a.id, shareCents: 100 },
+            { userId: b.id, shareCents: 100 },
+          ],
+        },
+      },
+    });
+
+    mockSignedInAs(a.id);
+    await endTrip(new Request(`http://t/api/groups/${group.id}/end-trip`, { method: "POST" }), {
+      params: Promise.resolve({ id: group.id }),
+    });
+
+    mockSignedInAs(b.id);
+    const denied = await reopenTrip(new Request(`http://t/api/groups/${group.id}/reopen`, { method: "POST" }), {
+      params: Promise.resolve({ id: group.id }),
+    });
+    expect(denied.status).toBe(403);
+
+    mockSignedInAs(a.id);
+    const allowed = await reopenTrip(new Request(`http://t/api/groups/${group.id}/reopen`, { method: "POST" }), {
+      params: Promise.resolve({ id: group.id }),
+    });
+    expect(allowed.status).toBe(200);
+
+    const reopened = await testPrisma.group.findUniqueOrThrow({ where: { id: group.id } });
+    expect(reopened.status).toBe("ACTIVE");
+    expect(reopened.settledAt).toBeNull();
+    expect(await testPrisma.settlement.count({ where: { groupId: group.id } })).toBe(0);
+
+    const again = await reopenTrip(new Request(`http://t/api/groups/${group.id}/reopen`, { method: "POST" }), {
+      params: Promise.resolve({ id: group.id }),
+    });
+    expect(again.status).toBe(400);
   });
 });

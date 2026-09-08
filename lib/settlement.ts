@@ -32,6 +32,32 @@ export async function computeNetBalances(db: Db, groupId: string) {
   return net;
 }
 
+/** Per-member paid/owed/net, for the balance-sheet view — read-only, no writes. */
+export async function computeBalanceBreakdown(db: Db, groupId: string) {
+  const [paidTotals, owedTotals, members] = await Promise.all([
+    db.expense.groupBy({
+      by: ["paidById"],
+      where: { groupId },
+      _sum: { amountCents: true },
+    }),
+    db.expenseSplit.groupBy({
+      by: ["userId"],
+      where: { expense: { groupId } },
+      _sum: { shareCents: true },
+    }),
+    db.groupMember.findMany({ where: { groupId }, include: { user: true } }),
+  ]);
+
+  const paidMap = new Map(paidTotals.map((p) => [p.paidById, p._sum.amountCents ?? 0]));
+  const owedMap = new Map(owedTotals.map((o) => [o.userId, o._sum.shareCents ?? 0]));
+
+  return members.map((m) => {
+    const paidCents = paidMap.get(m.userId) ?? 0;
+    const owedCents = owedMap.get(m.userId) ?? 0;
+    return { userId: m.userId, name: m.user.name, paidCents, owedCents, netCents: paidCents - owedCents };
+  });
+}
+
 /**
  * Greedy debt-simplification: repeatedly match the largest creditor with the
  * largest debtor. Not guaranteed globally minimal (NP-hard in general) but
